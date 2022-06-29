@@ -15,12 +15,53 @@ flush
 
 
 
-#2 ------------------ Task await
+#2 ------------------ Task await -- interrupting the process in between
+t = Task.async(fn -> Process.sleep(15_000); IO.puts("process complete"); 5 + 55 end)
+# %Task{
+#   owner: #PID<0.109.0>,
+#   pid: #PID<0.111.0>,
+#   ref: #Reference<0.29442496.2893086724.231933>
+# }
+
+
+Task.await t
+# ** (exit) exited in: Task.await(%Task{owner: #PID<0.109.0>, pid: #PID<0.111.0>, ref: #Reference<0.29442496.2893086724.231933>}, 5000)
+# ** (EXIT) time out
+# (elixir 1.13.1) lib/task.ex:809: Task.await/2
+
+# process complete -- this message (from earlier Task - t - which had IO.puts) shows that task is not complete.
+ Task.await t
+# ** (exit) exited in: Task.await(%Task{owner: #PID<0.109.0>, pid: #PID<0.111.0>, ref: #Reference<0.29442496.2893086724.231933>}, 5000)
+#     ** (EXIT) time out
+#     (elixir 1.13.1) lib/task.ex:809: Task.await/2
+
+# even second time, `Task.await t` - even after process completes - gives error.,
+
+
+
+#2 ------------------ Task await -- letting the process complete
 t = Task.async(fn -> Process.sleep(15_000); IO.puts("process complete"); 5 + 5 end)
-Task.await t
-# // error after 5 seconds
-Task.await t
-# // message after 10 seconds
+# %Task{
+#   owner: #PID<0.109.0>,
+#   pid: #PID<0.111.0>,
+#   ref: #Reference<0.29442496.2893086724.231933>
+# }
+
+
+# process complete -- this time, I waited for 15 seconds before typing next command
+ Task.await t
+# 10
+# it is the output
+
+flush
+# :ok
+# nothing in the mailbox!
+
+# process complete -- this message shows that task is not complete.
+ Task.await t
+# ** (exit) exited in: Task.await(%Task{owner: #PID<0.109.0>, pid: #PID<0.111.0>, ref: #Reference<0.29442496.2893086724.231933>}, 5000)
+#     ** (EXIT) time out
+#     (elixir 1.13.1) lib/task.ex:809: Task.await/2
 
 
 
