@@ -16,7 +16,7 @@ defmodule CLI do
   end
 
   def async_stream_task(range) do
-    range |> Task.async_stream(&CLI.add2/1) |> Enum.to_list()
+    range |> Task.async_stream(&CLI.add2/1, ordered: false) |> Enum.to_list()
   end
 end
 
@@ -38,5 +38,6 @@ Stream.map([1, 2, 3], fn x -> CLI.add2(x) end) |> Enum.to_list()
 1..1_000_000 |> CLI.async_stream_task()
 
 1..1000_000 |> CLI.enum_only()
+#  to spawn or not to - sasa juric
 1..1000_000 |> CLI.enum_task()
 1..1_000_000 |> CLI.async_stream_task()
