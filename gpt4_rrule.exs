@@ -157,7 +157,7 @@ defmodule RRuleParser do
     |> optional(concat(string(";"), interval_parser))
     # |> optional(concat(string(";"), count_parser))
     # |> optional(concat(string(";"), until_parser))
-    # |> optional(string(";"))
+    |> optional(string(";"))
     |> eos()
 
   defparsec(:parse, rrule_parser, debug: true)
