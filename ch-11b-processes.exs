@@ -6,10 +6,11 @@ defmodule LinksTest do
   end
 
   def chain(n) do
-    Process.flag(:trap_exit, true)
-    IO.puts("chain called with #{n}")
+    # Process.flag(:trap_exit, true)
+
     :timer.sleep(300)
-    spawn_link(__MODULE__, :chain, [n - 1])
+    pid = spawn_link(__MODULE__, :chain, [n - 1])
+    IO.puts("chain called with #{n}: #{inspect(pid)}")
 
     receive do
       {:EXIT, pid, reason} ->
