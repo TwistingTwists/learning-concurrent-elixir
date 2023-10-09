@@ -23,7 +23,7 @@ Mix.install([
   {:plug_cowboy, "~> 2.5"},
   {:jason, "~> 1.0"},
   {:phoenix, "~> 1.7.7"},
-  {:phoenix_live_view, "~> 0.19.5"},
+  {:phoenix_live_view, "~> 0.20.0"},
   {:typed_struct, "~> 0.1.4"},
   # s3 dependencies
   {:ex_aws, "~> 2.1"},
