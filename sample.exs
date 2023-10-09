@@ -80,16 +80,16 @@ defmodule ExampleWeb.S3Writer do
 
   @impl Phoenix.LiveView.UploadWriter
   def write_chunk(data, %{chunk: 1} = state) do
-    IO.inspect("INSIDE WRITE_CHUNK NOW!! - chunk: #{state.chunk}, length(data): #{length(data)} ")
+    IO.inspect("INSIDE WRITE_CHUNK NOW!! - chunk: #{inspect state.chunk}, length(data): #{inspect length(data)} ")
 
     s3_upload_op =
       ExAws.S3.upload(data, state.s3_config.bucket, state.filename)
-      |> IO.inspect("ExAws.S3.Upload - struct")
+      |> IO.inspect(label: "ExAws.S3.Upload - struct")
 
       s3_upload_op_with_upload_id = 
-        case  ExAws.S3.Upload.initialize(s3_upload_op, state.s3_config) |> IO.inspect("ExAws.S3.Upload.initialize - upload_id") do 
+        case  ExAws.S3.Upload.initialize(s3_upload_op, state.s3_config) |> IO.inspect(label: "ExAws.S3.Upload.initialize - upload_id") do 
           {:ok, s3_upload_op_with_upload_id} -> s3_upload_op_with_upload_id
-          nil -> raise RuntimeError,  "Could not intiate upload to the file"
+          nil -> raise   "Could not intiate upload to the file"
       end
 
     next = %{
