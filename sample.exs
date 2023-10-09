@@ -92,7 +92,7 @@ defmodule ExampleWeb.S3Writer do
           _ -> raise   "Could not intiate upload to the file"
       end
 
-    next = %{
+   %{
       state
       | chunk: state.chunk + 1,
         s3_upload_op: s3_upload_op_with_upload_id
@@ -145,20 +145,21 @@ defmodule Example.HomeLive do
        progress: &handle_progress/3,
        accept: ~w(.mp4),
        max_entries: 1,
+      #  roughly 400 MB
        max_file_size: 400 * 1000 * 1000,
-       # 6 MB
+       # 6 MB - because S3 expects the chunk size to be min of 5 MB
        chunk_size: 6 * 1000 * 1000,
        writer: &s3_writer/3
      )}
   end
 
-  def s3_writer(name, entry, socket) do
+  def s3_writer(_name, entry, _socket) do
     {ExampleWeb.S3Writer, [s3_config: ExAws.Config.new(:s3), filename: entry.client_name]}
   end
 
 
 
-  def handle_progress(:image, entry, socket) do
+  def handle_progress(:image, _entry, socket) do
   
     {:noreply, socket}
   end
@@ -280,6 +281,7 @@ children = [
 
 {:ok, _} = Supervisor.start_link(children, strategy: :one_for_one)
 
+Logger.configure(level: :debug)
 # unless running from IEx, sleep idenfinitely so we can serve requests
 unless IEx.started?() do
   Process.sleep(:infinity)
