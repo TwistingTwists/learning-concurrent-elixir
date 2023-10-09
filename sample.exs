@@ -89,7 +89,7 @@ defmodule ExampleWeb.S3Writer do
       s3_upload_op_with_upload_id = 
         case  ExAws.S3.Upload.initialize(s3_upload_op, state.s3_config) |> IO.inspect(label: "ExAws.S3.Upload.initialize - upload_id") do 
           {:ok, s3_upload_op_with_upload_id} -> s3_upload_op_with_upload_id
-          nil -> raise   "Could not intiate upload to the file"
+          _ -> raise   "Could not intiate upload to the file"
       end
 
     next = %{
