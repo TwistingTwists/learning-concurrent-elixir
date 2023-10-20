@@ -22,8 +22,8 @@ Application.put_env(:ex_aws, :s3,
 Mix.install([
   {:plug_cowboy, "~> 2.5"},
   {:jason, "~> 1.0"},
-  {:phoenix, "~> 1.7.7"},
-  {:phoenix_live_view, "~> 0.20.0"},
+  {:phoenix, "~> 1.7.9"},
+  {:phoenix_live_view, "~> 0.20.1"},
   {:typed_struct, "~> 0.1.4"},
   # s3 dependencies
   {:ex_aws, "~> 2.1"},
@@ -80,24 +80,30 @@ defmodule ExampleWeb.S3Writer do
 
   @impl Phoenix.LiveView.UploadWriter
   def write_chunk(data, %{chunk: 1} = state) do
-    IO.inspect("INSIDE WRITE_CHUNK NOW!! - chunk: #{inspect state.chunk}, length(data): #{inspect length(data)} ")
+    IO.inspect(
+      "INSIDE WRITE_CHUNK NOW!! - chunk: #{inspect(state.chunk)}, length(data): #{inspect(byte_size(data))} "
+    )
 
     s3_upload_op =
       ExAws.S3.upload(data, state.s3_config.bucket, state.filename)
       |> IO.inspect(label: "ExAws.S3.Upload - struct")
 
-      s3_upload_op_with_upload_id = 
-        case  ExAws.S3.Upload.initialize(s3_upload_op, state.s3_config) |> IO.inspect(label: "ExAws.S3.Upload.initialize - upload_id") do 
-          {:ok, s3_upload_op_with_upload_id} -> s3_upload_op_with_upload_id
-          _ -> raise   "Could not intiate upload to the file"
+    s3_upload_op_with_upload_id =
+      case ExAws.S3.Upload.initialize(s3_upload_op, state.s3_config)do
+          #  |> IO.inspect(label: "ExAws.S3.Upload.initialize - upload_id") 
+           
+        {:ok, s3_upload_op_with_upload_id} -> s3_upload_op_with_upload_id
+        _ -> raise "Could not intiate upload to the file"
       end
 
-   %{
+    next = %{ 
       state
       | chunk: state.chunk + 1,
         s3_upload_op: s3_upload_op_with_upload_id
     }
+    |> IO.inspect(label: "Wrote First Chunk to CloudFlare.")
 
+    {:ok, next}
   end
 
   def write_chunk(data, state) do
@@ -106,8 +112,8 @@ defmodule ExampleWeb.S3Writer do
     part =
       ExAws.S3.Upload.upload_chunk!(
         {data, state.chunk},
-        #   Map.delete(state.s3_upload_op, :src),
-        state.s3_upload_op,
+          Map.delete(state.s3_upload_op, :src),
+        # state.s3_upload_op,
         state.s3_config
       )
 
@@ -117,6 +123,11 @@ defmodule ExampleWeb.S3Writer do
   end
 
   @impl Phoenix.LiveView.UploadWriter
+  def close(state, :cancel) do
+    IO.inspect("Had to cancel upload because?: cancel")
+    {:error, :cancel, state}
+  end
+
   def close(state, reason_input) do
     reason_input |> IO.inspect(label: "Why is reason = ")
 
@@ -139,16 +150,17 @@ defmodule Example.HomeLive do
      socket
      |> assign(:uploaded_urls, [])
      |> allow_upload(
-        #  the upload name is :image, but please try to upload video of more than 10-15 Mb
+       #  the upload name is :image, but please try to upload video of more than 10-15 Mb
        :image,
        auto_upload: true,
        progress: &handle_progress/3,
        accept: ~w(.mp4),
        max_entries: 1,
-      #  roughly 400 MB
+       #  roughly 400 MB
        max_file_size: 400 * 1000 * 1000,
        # 6 MB - because S3 expects the chunk size to be min of 5 MB
        chunk_size: 6 * 1000 * 1000,
+       chunk_timeout: 30 * 1000,
        writer: &s3_writer/3
      )}
   end
@@ -157,15 +169,15 @@ defmodule Example.HomeLive do
     {ExampleWeb.S3Writer, [s3_config: ExAws.Config.new(:s3), filename: entry.client_name]}
   end
 
+  def handle_progress(:image, entry, socket) do
+    IO.inspect("handle_progress - :image with entry #{inspect entry} \n\n")
 
-
-  def handle_progress(:image, _entry, socket) do
-  
     {:noreply, socket}
   end
 
   @impl true
-  def handle_event("validate", _params, socket) do
+  def handle_event("validate", params, socket) do
+    IO.inspect("handle_event - validate with params #{inspect params}")
     {:noreply, socket}
   end
 
@@ -192,8 +204,8 @@ defmodule Example.HomeLive do
   @impl true
   def render("live.html", assigns) do
     ~H"""
-    <script src="https://cdn.jsdelivr.net/npm/phoenix@1.7.7/priv/static/phoenix.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/phoenix_live_view@0.20.0/priv/static/phoenix_live_view.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/phoenix@1.7.9/priv/static/phoenix.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/phoenix_live_view@0.20.1/priv/static/phoenix_live_view.min.js"></script>
     <script>
       let liveSocket = new window.LiveView.LiveSocket("/live", window.Phoenix.Socket)
       liveSocket.connect()
