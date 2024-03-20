@@ -1,0 +1,681 @@
+<!-- livebook:{"app_settings":{"access_type":"public","output_type":"rich","show_source":true,"slug":"pegs"},"persist_outputs":true} -->
+
+# PEG grammars
+
+```elixir
+Mix.install([
+  {:pegasus, "~> 0.2.4"},
+  {:nimble_parsec, "~> 1.4"}
+])
+```
+
+## Theory
+
+What is PEG?
+
+PEG is a type of analytic formal grammar, similar to context-free grammars, but with a different set of rules for resolving ambiguities. PEGs are designed to be unambiguous, meaning that for any given input string, there is at most one way to derive it from the grammar.
+
+<!-- livebook:{"break_markdown":true} -->
+
+
+
+<!-- livebook:{"break_markdown":true} -->
+
+Why not regex everything?
+
+<!-- livebook:{"break_markdown":true} -->
+
+##### Because:
+
+RFCs are often defined as ABNF grammars
+
+e.g. https://datatracker.ietf.org/doc/html/rfc5321
+
+Example using Pegasus: https://github.com/E-xyza/Exonerate/blob/master/lib/exonerate/formats/idn_email.ex
+
+## Examples
+
+```elixir
+defmodule PegasusExample do
+  import NimbleParsec
+  require Pegasus
+
+  @moduledoc """
+
+  Examples for PEG parsing.
+
+  PegasusExample.get_pairs("grass=4,horse=1, star=2")
+
+  From https://github.com/xored/peg/blob/master/docs/grammar-examples.md
+  PegasusExample.get_timestamp("2009-09-22T06:59:28")
+  PegasusExample.get_timestamp("2009-09-22 06:59:28")
+  PegasusExample.get_timestamp("Fri Jun 17 03:50:56 PDT 2011")
+  PegasusExample.get_timestamp("2010-10-26 10:00:53.360")
+  """
+
+  @parser_options [
+    Pair: [tag: :pair],
+    Word: [tag: :word],
+    Number: [tag: :number],
+    Space: [ignore: true],
+    Separator: [ignore: true],
+    Equals: [ignore: true]
+  ]
+  Pegasus.parser_from_string(
+    """
+    List <- Pair (Space* Separator Space* Pair)*
+    Pair <- Word Equals Number
+    Word <- [A-Za-z0-9_]+
+    Number <- [0-9]+
+    Space           <- ' ' / '\t' / EndOfLine
+    EndOfLine       <- '\r\n' / '\n' / '\r'
+    EndOfFile       <- !.
+    Separator       <- ','
+    Equals          <- '='
+    """,
+    @parser_options
+  )
+
+  defparsec(:get_pairs, parsec(:List))
+
+  @parser_timestamp [
+    Hour: [tag: :hour],
+    Minute: [tag: :minute],
+    Second: [tag: :second],
+    Year: [tag: :year],
+    Month: [tag: :month],
+    Day: [tag: :day],
+    TZ: [tag: :tz],
+    Space: [ignore: true],
+    Separator: [ignore: true],
+    Equals: [ignore: true]
+  ]
+  Pegasus.parser_from_string(
+    """
+       Timestamp <- DateTime / FreeDateTime
+
+       # Times
+       Hour <- [0-1] [0-9] / '2' [0-4]
+       Minute <- [0-5] [0-9]
+       Second <- [0-5] [0-9] / '60'
+       Fraction <- ('.' / ',') [0-9]+
+       IsoTz <- 'Z' / ('+' / '-') Hour (':'? Minute)?
+       TzL <- [A-Z]
+       TzAbbr <- TzL TzL (TzL (TzL TzL?)?)?
+       TZ <- IsoTz / TzAbbr
+       HM <- Hour ':' Minute Fraction?
+       HMS <- Hour ':' Minute ':' Second Fraction?
+       Time <- ('T' ' '?)? (HMS / HM) (' '? TZ)?
+
+       # Dates
+       Year <- [0-9] [0-9] [0-9] [0-9]
+       Month <- '0' [1-9] / '1' [0-2]
+       Day <- '0' [1-9] / [1-2] [0-9] / '3' [0-1]
+       Date <- Year '-' Month ('-' Day)?
+
+       # Combined
+       DateTime <- Date ' '? Time
+
+       # Free style
+       MonthAbbr <- 'Jan' / 'Feb' / 'Mar' / 'Apr' / 'May' / 'Jun' / 'Jul' / 'Aug' / 'Sep' / 'Sept' / 'Oct' / 'Nov' / 'Dec'
+       WeekDayAbbr <- 'Mon' / 'Tu' / 'Tue' / 'Tues' / 'Wed' / 'Th' / 'Thu' / 'Thur' / 'Thurs' / 'Fri' / 'Sat' / 'Sun'
+       FreeDateTime <- WeekDayAbbr ' ' MonthAbbr ' ' Day ' ' Time ' ' Year
+    """,
+    @parser_timestamp
+  )
+
+  defparsec(:get_timestamp, parsec(:Timestamp))
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, PegasusExample, <<70, 79, 82, 49, 0, 0, 121, ...>>,
+ [get_timestamp__0: 6, get_timestamp__1: 6]}
+```
+
+```elixir
+PegasusExample.get_pairs("grass=4,horse=1, star=2")
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:ok,
+ [
+   pair: [word: ~c"grass", number: ~c"4"],
+   pair: [word: ~c"horse", number: ~c"1"],
+   pair: [word: ~c"star", number: ~c"2"]
+ ], "", %{}, {1, 0}, 23}
+```
+
+```elixir
+PegasusExample.get_timestamp("2009-09-22T06:59:28")
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:ok,
+ [
+   {:year, ~c"2009"},
+   "-",
+   {:month, ["0", 57]},
+   "-",
+   {:day, ~c"22"},
+   "T",
+   {:hour, ~c"06"},
+   ":",
+   {:minute, ~c"59"},
+   ":",
+   {:second, ~c"28"}
+ ], "", %{}, {1, 0}, 19}
+```
+
+```elixir
+PegasusExample.get_timestamp("2009-09-22 06:59:28")
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:ok,
+ [
+   {:year, ~c"2009"},
+   "-",
+   {:month, ["0", 57]},
+   "-",
+   {:day, ~c"22"},
+   " ",
+   {:hour, ~c"06"},
+   ":",
+   {:minute, ~c"59"},
+   ":",
+   {:second, ~c"28"}
+ ], "", %{}, {1, 0}, 19}
+```
+
+```elixir
+PegasusExample.get_timestamp("Fri Jun 17 03:50:56 PDT 2011")
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:ok,
+ [
+   "Fri",
+   " ",
+   "Jun",
+   " ",
+   {:day, ~c"17"},
+   " ",
+   {:hour, ~c"03"},
+   ":",
+   {:minute, ~c"50"},
+   ":",
+   {:second, ~c"56"},
+   " ",
+   {:tz, ~c"PDT"},
+   " ",
+   {:year, ~c"2011"}
+ ], "", %{}, {1, 0}, 28}
+```
+
+```elixir
+PegasusExample.get_timestamp("2010-10-26 10:00:53.360")
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:ok,
+ [
+   {:year, ~c"2010"},
+   "-",
+   {:month, ["1", 48]},
+   "-",
+   {:day, ~c"26"},
+   " ",
+   {:hour, ~c"10"},
+   ":",
+   {:minute, ~c"00"},
+   ":",
+   {:second, ~c"53"},
+   ".",
+   51,
+   54,
+   48
+ ], "", %{}, {1, 0}, 23}
+```
+
+```elixir
+defmodule MyParser do
+  import NimbleParsec
+  require Pegasus
+
+  @question_opts [
+    question: [tag: :question],
+    question_number: [tag: :question_number],
+    question_header: [tag: :question_header, collect: true],
+    topic: [collect: true, tag: :topic],
+    # special_minus: [ignore: true]
+    rest_question: [tag: :rest_question, collect: true],
+    choices: [tag: :choices],
+    ABCD: [tag: :choice_option, collect: true],
+    choices_texts: [tag: :choices_texts, collect: true]
+  ]
+
+  Pegasus.parser_from_string(
+    """
+     question <- header 
+
+     header          <- "Q" question_number dot (space*)  topic  question_header rest_question choices 
+     
+     topic           <-  (curly text_ws+ curly)
+     curly           <-   "{" / "}"
+
+     question_header <- ((text_ws+  symbols) / text+)  EndOfLine+
+     question_number <- integer+
+
+     rest_question   <- (!"?" extended_text )+ 
+     
+     
+     choices   <- . space+ ( ABCD choices_texts)+
+     choices_texts <- text_or_ws+ whitespace*
+
+     text_or_ws <- whitespace* (!ABCD text)
+     
+     text_ws   <- text whitespace* / whitespace* text
+     
+     text    <-  [-0-9a-zA-Z\_]+ 
+
+     ABCD      <- "a)" / "b)" / "c)" / "d)"
+     whitespace <- [ \t\n\r]+
+
+
+     integer         <- ([0-9])
+     
+     extended_text   <- ( curly text_ws curly ) / ( symbols text_ws symbols ) / text_ws  / (symbols text_ws)
+     
+     symbols         <-   ":"  / dot / "(" / ")" / "/"
+
+     dot             <- "."
+     space           <- ' ' / '\t' / EndOfLine
+     EndOfLine       <- '\r\n' / '\n' / '\r'
+     EndOfFile       <- !.
+     
+       
+    """,
+    @question_opts
+  )
+
+  # defcombinatorp(:special_minus,utf8_char([?–]))
+
+  defparsec(:parse_question, parsec(:question))
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, MyParser, <<70, 79, 82, 49, 0, 0, 119, ...>>,
+ [parse_question__0: 6, parse_question__1: 6]}
+```
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+question_text = """
+Q21. {Envi Species} Consider the following statements about Black Necked Crane:
+
+It is native to Asia and listed as Vulnerable on the IUCN Red List.
+The Tso Kar Wetlands Complex is an important foraging and breeding ground for it.
+The assessment of the black-necked cranes was recently carried out by the Wildlife Institute of India and the Zoological Survey of India.
+How many of the above statement(s) is/are correct?
+  a) Only one
+  b) Only two
+  c) All
+  d) None
+
+
+"""
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+"Q21. {Envi Species} Consider the following statements about Black Necked Crane:\n\nIt is native to Asia and listed as Vulnerable on the IUCN Red List.\nThe Tso Kar Wetlands Complex is an important foraging and breeding ground for it.\nThe assessment of the black-necked cranes was recently carried out by the Wildlife Institute of India and the Zoological Survey of India.\nHow many of the above statement(s) is/are correct?\n  a) Only one\n  b) Only two\n  c) All\n  d) None\n\n\n"
+```
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+MyParser.parse_question(question_text)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:ok,
+ [
+   question: [
+     "Q",
+     {:question_number, ~c"21"},
+     ".",
+     " ",
+     {:topic, ["{Envi Species}"]},
+     {:question_header, [" Consider the following statements about Black Necked Crane:\n\n"]},
+     {:rest_question,
+      ["It is native to Asia and listed as Vulnerable on the IUCN Red List.\nThe Tso Kar Wetlands Complex is an important foraging and breeding ground for it.\nThe assessment of the black-necked cranes was recently carried out by the Wildlife Institute of India and the Zoological Survey of India.\nHow many of the above statement(s) is/are correct"]},
+     {:choices,
+      [
+        63,
+        "\n",
+        " ",
+        " ",
+        {:choice_option, ["a)"]},
+        {:choices_texts, [" Only one\n  "]},
+        {:choice_option, ["b)"]},
+        {:choices_texts, [" Only two\n  "]},
+        {:choice_option, ["c)"]},
+        {:choices_texts, [" All\n  "]},
+        {:choice_option, ["d)"]},
+        {:choices_texts, [" None\n\n\n"]}
+      ]}
+   ]
+ ], "", %{}, {13, 469}, 469}
+```
+
+```elixir
+defmodule MyParser2 do
+  import NimbleParsec
+  require Pegasus
+
+  Pegasus.parser_from_string(
+    """
+     header    <- (text+   symbols)*
+     
+     text      <- [a-zA-Z0-9_\.\?\\-]+  / space 
+     space     <- [ \t\r]+
+     colon     <- ":" 
+     
+
+    """,
+    header: [tag: true]
+  )
+
+  defcombinatorp(:symbols, utf8_char([?–, ?{, ?}]))
+
+  defparsec(:parse_question, parsec(:header))
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, MyParser2, <<70, 79, 82, 49, 0, 0, 29, ...>>,
+ [parse_question__0: 6, parse_question__1: 6]}
+```
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+MyParser2.parse_question("Q21. {Envi – Species} C")
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:ok,
+ [
+   header: [81, 50, 49, 46, 32, 123, 69, 110, 118, 105, 32, 8211, 32, 83, 112, 101, 99, 105, 101,
+    115, 125]
+ ], " C", %{}, {1, 0}, 23}
+```
+
+## stackoverflow example
+
+```elixir
+defmodule MyParser3 do
+  @moduledoc """
+  https://stackoverflow.com/questions/52863230/how-do-i-write-a-grammar-for-this-negative-lookaheads-in-peg-js
+  """
+  import NimbleParsec
+  require Pegasus
+
+  Pegasus.parser_from_string(
+    """
+     expression  <- terms (whitespace delimiter whitespace  terms)* 
+
+     terms   <- term (whitespace term)*
+     term    <- [a-z]+
+
+     delimiter <- "."
+     
+     whitespace <- [ \t\n\r]+
+
+
+    """,
+    expression: [collect: true]
+  )
+
+  defparsec(:parse_question, parsec(:expression))
+end
+
+MyParser3.parse_question("abc def . ghi . jkl")
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:ok, ["abc def . ghi . jkl"], "", %{}, {1, 0}, 19}
+```
+
+## with lookahead
+
+```elixir
+defmodule MyParser4 do
+  @moduledoc """
+  https://en.wikipedia.org/wiki/Parsing_expression_grammar#Unexpected_behaviour
+  """
+  import NimbleParsec
+  require Pegasus
+
+  Pegasus.parser_from_string(
+    """
+     expression  <- terms (whitespace delimiter whitespace  terms)* whitespace choices
+
+     terms   <- term (whitespace term)*
+     term    <- [a-z]+ !")"
+
+     delimiter <- "."
+     
+     choices   <- ( ABCD choices_texts)+
+     choices_texts <- text_or_ws+ whitespace*
+
+     text_or_ws <- whitespace* (!ABCD text)
+     
+     text    <-  [-0-9a-zA-Z\_]+ 
+
+     ABCD      <- "a)" / "b)" / "c)" / "d)"
+     whitespace <- [ \t\n\r]+
+
+
+    """,
+    ABCD: [tag: :abcd, collect: true],
+    choices_texts: [tag: :choices_text, collect: true]
+  )
+
+  defparsec(:parse_question, parsec(:expression))
+end
+
+MyParser4.parse_question(
+  "abc def . ghi . jkl a) choice 1 \n b) choice-2 \n c) choice_3 \n d) choice_4"
+)
+
+# text ABCD  choice_text   ABCD choice_text
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:ok,
+ [
+   97,
+   98,
+   99,
+   32,
+   100,
+   101,
+   102,
+   32,
+   ".",
+   32,
+   103,
+   104,
+   105,
+   32,
+   ".",
+   32,
+   106,
+   107,
+   108,
+   32,
+   {:abcd, ["a)"]},
+   {:choices_text, [" choice 1 \n "]},
+   {:abcd, ["b)"]},
+   {:choices_text, [" choice-2 \n "]},
+   {:abcd, ["c)"]},
+   {:choices_text, [" choice_3 \n "]},
+   {:abcd, ["d)"]},
+   {:choices_text, [" choice_4"]}
+ ], "", %{}, {4, 61}, 73}
+```
+
+## choices
+
+```elixir
+defmodule MyParser5 do
+  @moduledoc """
+
+  """
+  import NimbleParsec
+  require Pegasus
+
+  Pegasus.parser_from_string(
+    """
+
+     question_text   <- (!"a)" q_rich_text)+
+     q_rich_text     <- symbols? whitespace? text symbols? whitespace? 
+
+     text            <-  [-0-9a-zA-Z\_,]+
+     
+     whitespace      <- [ \t\n\r]+
+
+
+     integer         <- [0-9]
+
+
+     symbols         <-   ":"  / dot / "(" / ")" / "/" / "{" / "}"  / "?"
+
+     dot             <- "."
+     EndOfFile       <- !.
+
+
+
+    """,
+    question_text: [tag: :question_text, collect: true]
+  )
+
+  defparsec(:parse_question, parsec(:question_text))
+end
+
+# string = " Which of the following are eligible entities under the Fisheries and Aquaculture Infrastructure Development Fund (FIDF)?\n\nUnion Territories\nState Owned Corporations\nFisheries Cooperative Federations\nSelf Help Groups (SHGs)\nPrivate Companies and Entrepreneurs\nChoose the correct code:\n  a) 1, 2, 3 and 4\n  b) 2 and 3 only\n  c) 2, 3, and 4\n  d) All\n"
+string =
+  " Consider the following statements about World Sustainable Development (WSDS) Summit:\n\nIt is the biennial flagship event of The Energy and Resources Institute (TERI).\nIt is the only independently convened international summit on sustainable development and environment, based in the Global South.\nWhich of the above statement(s) is/are correct?\n  a) 1 only\n  b) 2 only\n  c) Both 1 and 2\n  d) Neither 1nor 2\n"
+
+MyParser5.parse_question(string)
+
+# text ABCD  choice_text   ABCD choice_text
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:ok,
+ [
+   question_text: [" Consider the following statements about World Sustainable Development (WSDS) Summit:\n\nIt is the biennial flagship event of The Energy and Resources Institute (TERI).\nIt is the only independently convened international summit on sustainable development and environment, based in the Global South.\nWhich of the above statement(s) is/are correct?\n  "]
+ ], "a) 1 only\n  b) 2 only\n  c) Both 1 and 2\n  d) Neither 1nor 2\n", %{}, {6, 345}, 347}
+```
+
+## post_traverse - Nimbleparsec and Pegasus
+
+```elixir
+defmodule MyParser6 do
+  import NimbleParsec
+
+  defparsec(
+    :letters_to_chars,
+    ascii_char([?a..?z])
+    |> ascii_char([?a..?z])
+    |> ascii_char([?a..?z])
+    |> post_traverse({:join_and_wrap, ["-"]})
+  )
+
+  defp join_and_wrap(rest, args, context, _line, _offset, joiner) do
+    {rest, args |> Enum.join(joiner) |> List.wrap(), context}
+  end
+end
+
+MyParser6.letters_to_chars("abc")
+# => {:ok, ["99-98-97"], "", %{}, {1, 0}, 3}
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:ok, ["99-98-97"], "", %{}, {1, 0}, 3}
+```
+
+#### Best of both worlds - NimbleParsec and Pegasus
+
+<!-- livebook:{"break_markdown":true} -->
+
+##### UTF-8 Chars
+
+<!-- livebook:{"break_markdown":true} -->
+
+What is Punycode?
+Punycode is a special encoding used to convert Unicode characters to ASCII, which is a smaller, restricted character set. Punycode is used to encode internationalized domain names (IDN).
+
+Play with punycode: https://www.punycoder.com/
+
+```elixir
+# source https://github.com/E-xyza/Exonerate/blob/master/lib/exonerate/formats/idn_hostname.ex#L47
+
+defcombinatorp(:IDN_HN_UTF8_non_ascii, utf8_char(not: 0..127))
+```
+
+### Json Pointers
+
+<!-- livebook:{"break_markdown":true} -->
+
+source: https://github.com/E-xyza/Exonerate/blob/1a639563a64ee1bf2b3ad4417871c3d3034c7077/lib/exonerate/formats/json_pointer.ex#L34-L44
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+ Pegasus.parser_from_string("""
+        JP_json_pointer    <- ( "/" JP_reference_token )*
+        JP_reference_token <- ( JP_unescaped / JP_escaped )*
+        JP_escaped         <- "~" ( "0" / "1" )
+          # representing '~' and '/', respectively
+        """)
+
+        defcombinatorp(:JP_unescaped, utf8_char(not: 0x2F, not: 0x7E))
+        # 0x2F ('/') and 0x7E ('~') are excluded from 'unescaped'
+
+        defparsec(unquote(name), parsec(:JP_json_pointer) |> eos)
+```
