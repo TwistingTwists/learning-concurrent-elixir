@@ -6,10 +6,8 @@ Mix.install([
 alias Explorer.Series
 
 s1 = 100_001..1 |> Enum.to_list() |> Series.from_list()
-# s = 200_000..100_000 |> Enum.to_list() |> Series.from_list()
 
 s2 = 100_001..1 |> Enum.to_list()
-# s3 = 200_000..100_000 |> Enum.to_list()
 
 defmodule SeriesCrunch do
   alias Explorer.Series
@@ -22,14 +20,14 @@ end
 
 defmodule EnumCrunch do
   def run(s1) do
-    # Returns boolean mask of left == right, element-wise.
+    #  aggregate functions
     Enum.sum(s1) / Enum.count(s1)
   end
 end
 
 defmodule Enum2Crunch do
   def run(s1) do
-    # Returns boolean mask of left == right, element-wise.
+    #  aggregate functions
     {count, sum} = Enum.reduce(s1, {0, 0}, fn x, {count, sum} -> {count + 1, x + sum} end)
     sum / count
   end
